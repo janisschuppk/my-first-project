@@ -1,0 +1,106 @@
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-width: 320px;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #1f1f1f;
+}
+
+body {
+  display: grid;
+  place-items: center;
+}
+
+.training-stage {
+  position: relative;
+  width: min(100vw, calc(100vh * 2552 / 1328));
+  aspect-ratio: 2552 / 1328;
+  background: url("assets/session-expired-reference.png") center / 100% 100% no-repeat;
+  container-type: inline-size;
+}
+
+.training-marker {
+  position: absolute;
+  z-index: 2;
+  right: 1.2%;
+  bottom: 1.2%;
+  padding: 0.42em 0.8em;
+  border: max(1px, 0.0784cqw) solid #7a1111;
+  background: #fff3a6;
+  color: #7a1111;
+  font: 700 clamp(12px, 1.08cqw, 27.5616px)/1 Arial, sans-serif;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.mailbox-label {
+  position: absolute;
+  z-index: 1;
+  top: 0%;
+  right: 4.5%;
+  width: 30%;
+  height: 4%;
+  box-sizing: border-box;
+  padding-top: 0.65cqw;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
+  background: linear-gradient(to bottom, #303030 0%, #171717 100%);
+  color: #bdbdbd;
+  font: 400 0.86cqw/1 Arial, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.training-input {
+  position: absolute;
+  z-index: 1;
+  left: 41.9671%;
+  width: 13.3621%;
+  border: 1px solid #777;
+  border-radius: 2px;
+  background: #fff;
+  color: #111;
+  padding: 0.12em 0.3em;
+  font: 400 clamp(10px, 1.0972cqw, 28px)/1.2 Arial, sans-serif;
+  outline: none;
+}
+
+.training-input:focus-visible {
+  outline: 2px solid #1f5fbf;
+  outline-offset: 1px;
+}
+
+.training-input--username {
+  top: 50.0753%;
+  height: 3.3133%;
+}
+
+.training-input--password {
+  top: 53.5392%;
+  height: 3.2380%;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

