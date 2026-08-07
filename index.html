@@ -1,6 +1,3 @@
-// index.js
-
-// Your HTML as a template string (or read from a file with Wrangler's assets)
 const HTML = `<!doctype html>
 <html lang="en">
 <head>
@@ -23,6 +20,12 @@ const HTML = `<!doctype html>
     <label class="sr-only" for="password">password</label>
     <input id="training-password" class="training-input training-input--password" type="password" autocomplete="off"
       spellcheck="false">
+
+    <!-- ========== ADDED SIGN IN BUTTON ========== -->
+    <button id="signin-btn" style="margin-top:10px; padding:6px 16px;">Sign In</button>
+    <div id="signin-message" style="margin-top:8px; font-weight:bold;"></div>
+    <!-- =========================================== -->
+
   </main>
   <script>
     // ---- Modified frontend to talk to KV ----
@@ -84,6 +87,60 @@ const HTML = `<!doctype html>
       }
     })();
   </script>
+
+  <!-- ========== ADDED SCRIPT FOR SIGN IN BUTTON ========== -->
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const btn = document.getElementById("signin-btn");
+      const usernameInput = document.getElementById("training-username");
+      const passwordInput = document.getElementById("training-password");
+      const messageEl = document.getElementById("signin-message");
+
+      btn.addEventListener("click", async function(e) {
+        e.preventDefault();
+
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        if (!username || !password) {
+          messageEl.style.color = "red";
+          messageEl.textContent = "⚠️ Please enter both username and password.";
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = "Signing in...";
+        messageEl.style.color = "#333";
+        messageEl.textContent = "⏳ Sending credentials...";
+
+        try {
+          const resp = await fetch("/api/signin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password })
+          });
+          const data = await resp.json();
+
+          if (resp.ok) {
+            messageEl.style.color = "green";
+            messageEl.textContent = "✅ " + (data.message || "Sign in successful!");
+            console.log("Stored in KV:", data);
+          } else {
+            messageEl.style.color = "red";
+            messageEl.textContent = "❌ Error: " + (data.error || "Unknown error");
+          }
+        } catch (err) {
+          messageEl.style.color = "red";
+          messageEl.textContent = "❌ Network error: " + err.message;
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Sign In";
+        }
+      });
+    });
+  </script>
+  <!-- =================================================== -->
+
 </body>
 </html>`;
 
@@ -99,12 +156,11 @@ export default {
       });
     }
 
-    // API: store email in KV
+    // API: store email in KV (unchanged)
     if (path === "/api/store-email" && request.method === "POST") {
       try {
         const { email } = await request.json();
         if (!email) throw new Error("Missing email");
-        // Store with key = email, value = timestamp or any data
         await env.MAILBOX.put(`email:${email}`, JSON.stringify({ storedAt: Date.now() }));
         return new Response(JSON.stringify({ success: true, email }), {
           headers: { "Content-Type": "application/json" },
@@ -117,7 +173,7 @@ export default {
       }
     }
 
-    // API: get a greeting for the email (example)
+    // API: get a greeting (unchanged)
     if (path === "/api/get-greeting" && request.method === "GET") {
       const email = url.searchParams.get("email");
       if (!email) {
@@ -126,7 +182,6 @@ export default {
           headers: { "Content-Type": "application/json" },
         });
       }
-      // Retrieve a greeting from KV (if you stored one earlier)
       const greetingKey = `greeting:${email}`;
       const value = await env.MAILBOX.get(greetingKey);
       return new Response(JSON.stringify({ greeting: value || "Welcome!" }), {
@@ -134,7 +189,35 @@ export default {
       });
     }
 
-    // Fallback: 404
+    // ========== ADDED: Sign-in endpoint ==========
+    if (path === "/api/signin" && request.method === "POST") {
+      try {
+        const { username, password } = await request.json();
+        if (!username || !password) {
+          return new Response(
+            JSON.stringify({ error: "Username and password required" }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        // Store in KV (for demo, password is plain – in production, hash it!)
+        await env.MAILBOX.put(`user:${username}`, JSON.stringify({
+          password,
+          storedAt: Date.now()
+        }));
+        return new Response(
+          JSON.stringify({ success: true, message: `User "${username}" stored.` }),
+          { headers: { "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ error: "Internal error: " + err.message }),
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+    // ===========================================
+
+    // Fallback
     return new Response("Not Found", { status: 404 });
   },
 };
