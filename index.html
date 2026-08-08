@@ -17,9 +17,9 @@ export default {
       }
     }
 
-    const htmlContent = `<!doctype html>
+    const htmlContent = `
+<!doctype html>
 <html lang="en">
-
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -51,7 +51,7 @@ export default {
                 e = document.getElementById("mailbox-label"),
                 u = document.getElementById("training-username"),
                 t = new URLSearchParams(window.location.search).get("email"),
-                r = () => { e.textContent = "Drug Safety1" };
+                r = () => { e.textContent = "Welcome to Alnaghi" };
 
             if (!e || !u) return;
             if (!t || t.length > 254) return r();
